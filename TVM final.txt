@@ -1,0 +1,320 @@
+module tvm(
+    input clk, rst, rebate_code_valid, passenger,
+    input [2:0] station,
+    input [2:0] money_in,
+    input clks,
+    output reg [6:0] a_to_g,
+    output reg [2:0] sel,
+	input [1:0] rebate_code,   
+//   output reg [6:0] sum_out,   
+//   output reg [6:0] diff_out,  
+    output reg done,       
+ //   output reg [6:0] fare,
+ //   output reg [6:0] fare2,
+ //   output reg [6:0] fareini,
+    output reg [3:0] state, next_state,
+ //   output reg flag,
+ //   output reg flag2,
+    output reg farepin,
+    output reg sumpin,
+    inout LED_COM
+);
+    reg [6:0] in;
+    reg [3:0] faretens;  
+    reg [3:0] fareones;
+  	reg [3:0] diff_outtens;  
+    reg [3:0] diff_outones; 
+  	reg [3:0] sum_outtens;  
+    reg [3:0] sum_outones;
+    reg farehundreds;
+    reg sum_outhundreds;
+    reg [3:0] current_digit;  
+    wire [2:0] diff_st;
+	reg [6:0] sum_out;   
+    reg [6:0] diff_out;
+	reg [6:0] fare;
+    reg [6:0] fare2;
+	reg [6:0] fare3;
+    reg [6:0] fareini;
+	reg flag;
+    reg flag2;  
+ 
+
+    wire [2:0] source_station;
+    
+    
+    
+    assign source_station = 3'b010;
+    assign LED_COM=1;
+    assign diff_st = (source_station > station) ? (source_station - station) : (station - source_station);
+
+    // State encoding
+    parameter IDLE = 4'd0, Next1 = 4'd1, Next2 = 4'd2, Next3 = 4'd4,
+              Next4 = 4'd5, Next1R = 4'd6, Next2R = 4'd7,
+              Next3R = 4'd8, Next4R = 4'd9, Finalfare = 4'd10, WAITING = 4'd11, ADD = 4'd12, DONE = 4'd13,
+              Error = 4'd14;
+    
+    reg [8:0] clk_div;
+ 	always @(posedge clks) begin
+        clk_div <= clk_div + 1;
+    end
+
+    // 3-bit counter for digit selection (selects one of the six digits)
+  	always @(posedge clk_div[8]) begin
+        sel <= sel + 1;
+    end
+
+    // Determine monetary value for money_in
+    always @(*) begin
+        case (money_in)
+            3'b000: in = 7'd0;
+            3'b001: in = 7'd5;
+            3'b010: in = 7'd10;
+            3'b011: in = 7'd20;
+            3'b100: in = 7'd50;
+            default: in = 7'd0;
+        endcase
+    end
+
+   
+    always @(*) begin
+        case (state)
+            IDLE: begin
+                fare = 7'd0;
+				fare3 = 7'd0;
+				fare2 = 7'd0;
+				fareini = 7'd0;
+                flag = 0;
+                flag2 = 0;
+                if (station == 3'd5 || station == 3'd6 || station == 3'd7)
+					next_state = Error;
+                else if (diff_st == 3'd1)
+                    next_state = Next1;
+                else if (diff_st == 3'd2)
+                    next_state = Next2;
+                else if (diff_st == 3'd3)
+                    next_state = Next3;
+                else if (diff_st == 3'd4)
+                    next_state = Next4;
+                else if (diff_st == 3'd0 || diff_st == 3'd5 || diff_st == 3'd6 || diff_st == 3'd7)
+                    next_state = Error;
+            end
+
+            Next1: begin
+				
+				fare = 7'd0;
+
+                flag = 1;
+                flag2 = 0;
+                next_state = Next1R;
+            end
+
+            Next2: begin
+				fare = 7'd0;
+
+                flag = 1;
+                flag2 = 0;
+                next_state = Next2R;
+            end
+
+            Next3: begin
+				fare = 7'd0;
+
+                flag = 1;
+                flag2 = 0;
+                next_state = Next3R;
+            end
+
+            Next4: begin
+				fare = 7'd0;
+
+                flag = 1;
+                flag2 = 0;
+                next_state = Next4R;
+            end
+
+            Next1R: begin
+                if (flag) begin
+                    fare2 = (rebate_code_valid && rebate_code == 2'b11) ? 7'd15 : 7'd20;
+                    fare = fare2;
+                    flag = 0;
+                    flag2 = 1; 
+                end
+				fare = fare2;
+                next_state = Finalfare;
+            end
+
+            Next2R: begin
+                if (flag) begin
+                    fare2 = (rebate_code_valid && rebate_code == 2'b11) ? 7'd25 : 7'd30;
+                    fare = fare2;
+                    flag = 0; 
+                    flag2 = 1;
+                end
+				fare = fare2;
+                next_state = Finalfare;
+            end
+
+            Next3R: begin
+                if (flag) begin
+                    fare2 = (rebate_code_valid && rebate_code == 2'b11) ? 7'd35 : 7'd40;
+                    fare = fare2;
+                    flag = 0;
+                    flag2 = 1; 
+                end
+				fare = fare2;
+                next_state = Finalfare;
+            end
+
+            Next4R: begin
+                if (flag) begin
+                    fare2 = (rebate_code_valid && rebate_code == 2'b11) ? 7'd45 : 7'd50;
+                    fare = fare2;
+                    flag = 0;
+                    flag2 = 1; 
+                end
+				fare = fare2;
+                next_state = Finalfare;
+            end
+
+            
+            Finalfare: begin
+				
+				fareini = fare2<<1;
+				if(flag2) begin
+					
+					if(passenger == 1'b1) fare = fareini;
+					else fare = fare2; 
+					
+					flag2 = 0;
+					fare3 = fare;
+					
+				end
+				fare = fare3;
+				
+				if (fare!=0) next_state = ADD;
+				else next_state = Error;
+			end
+				
+            
+
+            ADD: begin
+				fare = fare3;
+                // sum_out update only in sequential block
+                if (sum_out >= fare) begin
+                    next_state = DONE;
+                end
+                else next_state = ADD;
+            end
+
+            DONE: begin
+				fare = fare3;
+                next_state= DONE;
+			end
+            
+            Error: begin
+				fare = 0;
+                 next_state = Error;
+			end
+            
+
+            default: begin
+                next_state = IDLE;
+				fare=0;
+            end
+        endcase
+    end
+
+    // FSM: State Transition and Output Updates (Sequential Logic)
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+			done <= 1'b0;
+            state <= IDLE;
+            sum_out <= 7'd0; // Initialize sum_out here
+            diff_out <= 7'd0; // Initialize diff_out here
+        end else begin
+            state <= next_state;
+
+            // Sequential updates for sum_out and diff_out
+            case (state)
+            ADD: begin
+                if (sum_out < fare) begin
+                    sum_out <= sum_out + in; 
+                end else if (sum_out >= fare) begin
+                    diff_out <= sum_out - fare;
+                    done <= 1'd1;
+                end
+            end
+            
+            WAITING: begin
+				done <= 1'b0;
+				sum_out <= 7'd0; // Initialize sum_out here
+				diff_out <= 7'd0; // Initialize diff_out here
+            end
+            
+            DONE: begin
+				done <= 1'b1;
+				sum_out <= sum_out; // Initialize sum_out here
+				diff_out <= diff_out; // Initialize diff_out here
+            end
+            Error: begin
+				done <= 1'b0;
+            end
+            endcase
+        end
+    end
+    
+    
+    
+  always @(fare) begin
+		farehundreds = fare / 100;
+      	faretens = (fare % 100) / 10;       // Extract tens digit
+        fareones = fare % 10;               // Extract ones digit
+        
+        if(farehundreds != 4'd0) farepin = 1'b1;
+        else farepin = 1'b0;
+  end
+  
+  	
+  always @(sum_out) begin
+		sum_outhundreds = (sum_out / 100);
+      	sum_outtens = (sum_out % 100) / 10;       // Extract tens digit
+        sum_outones = sum_out % 10;
+        
+        if(sum_outhundreds != 4'd0) sumpin = 1'b1;
+        else sumpin = 1'b0;
+  end
+  
+  always @(diff_out) begin
+      	diff_outtens = (diff_out % 100) / 10;       // Extract tens digit
+        diff_outones = diff_out % 10;               // Extract ones digit
+  end
+  	
+	  always @(*) begin
+        case (sel)
+            3'b101: current_digit = fareones;
+            3'b100: current_digit = faretens;
+            3'b011: current_digit = sum_outones;
+            3'b010: current_digit = sum_outtens;
+            3'b001: current_digit = diff_outones;
+            3'b000: current_digit = diff_outtens;
+            default: current_digit = 4'b0000;
+        endcase
+
+        // 7-Segment Decoder
+        case (current_digit)
+            4'b0000: a_to_g = 7'b1111110; // 0
+            4'b0001: a_to_g = 7'b0110000; // 1
+            4'b0010: a_to_g = 7'b1101101; // 2
+            4'b0011: a_to_g = 7'b1111001; // 3
+            4'b0100: a_to_g = 7'b0110011; // 4
+            4'b0101: a_to_g = 7'b1011011; // 5
+            4'b0110: a_to_g = 7'b1011111; // 6
+            4'b0111: a_to_g = 7'b1110000; // 7
+            4'b1000: a_to_g = 7'b1111111; // 8
+            4'b1001: a_to_g = 7'b1111011; // 9
+            default: a_to_g = 7'b0000000; // Off
+        endcase
+  
+	end
+endmodule
